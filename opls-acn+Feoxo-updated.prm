@@ -1,0 +1,50 @@
+NonBon   6  1   0  0    0.0 0.0 -2.0   0.0 0.0 -2.0
+! opls_753: nitrile N
+VDW NZ    3.2   0.17
+! opls_754: nitrile C
+VDW CZ    3.3   0.066
+! opls_755: methyl C in acetonitrile
+VDW CT    3.3   0.066
+! opls_759: methyl H in acetonitrile
+VDW HC   2.50    0.015
+! UFF Fe6+2 LJ proxy; x = 2.912 A converted to sigma = 2.59430 A : J. Am. Chem. Soc. 1992, 114, 10024–10035
+VDW FE_52   2.594   0.013
+!O25 opls_466 AA =O:  esters
+VDW O_25  2.96  0.21
+!N_1_8 opls_520 
+VDW NT_1  3.25  0.17
+!N_15_20 opls_902 
+VDW NT_2  3.3  0.17
+!C_2_3_4_5_6_9_10_11_12_13 opls_521,522,523
+VDW CT_1 3.55  0.07
+!H_26_27_50_28_31_32_51_33 opls_524,525,526
+VDW HA_1 2.42  0.03
+!C_7_14_16_19_21_24 opls_908
+VDW CT_2 3.50  0.066
+!H_29_30_34_35_36_37_42_43_44_49 opls_911
+VDW HA_2 2.5  0.015
+!C_17_18_22_23 opls_136
+VDW CT_3 3.50  0.066
+!H_38_39_40_41_45_46_47_48 opls_140
+VDW HA_3 2.5  0.03
+!O53 carboxylate Oxygen opls_272
+VDW  O_53  2.96   0.21
+!O55 carboxylate Oxygen opls_272
+VDW  O_55  2.96   0.21
+!C_54 carboxylate carbon opls_271
+VDW CT_4 3.75  0.105
+!C_56_59_60_63_67_71 opls_274
+VDW CT_5 3.5  0.066
+!H_57_58_61_62_64_65_66_68_69_70_72_73_74 opls_140
+VDW HA_4 2.5  0.03
+HrmStr1 CZ NZ 650.0         1.157
+HrmStr1 CT CZ 390.0         1.470
+HrmStr1 CT HC 340.0         1.090
+HrmStr1 *  *    0.0         0.0
+LinBnd1 CT CZ NZ 300.0
+HrmBnd1 HC CT CZ 35.0           108.5
+HrmBnd1 HC CT HC 33.0           107.8
+HrmBnd1 *  *  *   0.0             0.0
+AmbTrs  NZ CZ CT HC 0   180   0   180    0.0   0.0   0.0 0.0  1.0
+AmbTrs  *  *  *  *  0   0   0   0    0.0   0.0   0.0  0.0  1.0
+

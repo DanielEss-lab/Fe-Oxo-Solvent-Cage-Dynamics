@@ -1,0 +1,257 @@
+--- working_modified/main.py
++++ bgan_eps_feoxo/main.py
+@@ -1,9 +1,13 @@
+ import os
++import json
++import platform
++from pathlib import Path
++from importlib.metadata import version
+ import random
+ import torch
+ import argparse
+ import numpy as np
+-from bgan import BGANEPS
++from .bgan import BGANEPS
+ from sklearn.preprocessing import MinMaxScaler
+ 
+ def set_seed(seed):
+@@ -27,8 +31,10 @@
+         )
+     return rc
+ 
+-if __name__ == "__main__":
+-    parser = argparse.ArgumentParser("")
++def main(argv=None):
++    parser = argparse.ArgumentParser(description="Modified BGAN-EPS: configurable architecture, custom coordinates, and arm-only entropy.")
++    parser.add_argument("--workdir", type=Path, default=Path.cwd(), help="Directory containing dataset/ and log/ (default: current directory)")
++    parser.add_argument("--overwrite", action="store_true", help="Allow replacing existing bgan loop outputs for this reaction")
+     parser.add_argument("--reaction", type=str, default="", help="Name of the reaction file without format tag")
+     parser.add_argument(
+         "--ensemble", type=int, default=10, help="Number of structural ensembles for entropic path sampling"
+@@ -83,7 +89,7 @@
+         "--loop", type=int, default=20, help="Number of BGAN-EPS rounds (5-20 recommended based on available computation resources)"
+     )
+ 
+-    args = parser.parse_args()
++    args = parser.parse_args(argv)
+     if args.reaction == "":
+         raise ValueError("--reaction is required")
+     if args.bins < 2:
+@@ -91,11 +97,55 @@
+     if args.window_points < 1:
+         raise ValueError("--window_points must be at least 1")
+ 
+-    output_dir = f"./log/{args.reaction}"
++    if Path(args.reaction).name != args.reaction or args.reaction in (".", "..") or "/" in args.reaction or "\\" in args.reaction:
++        raise ValueError("--reaction must be a simple dataset name, not a path")
++    if args.loop < 1 or args.epochs < 1 or args.ensemble < 1:
++        raise ValueError("--loop, --epochs, and --ensemble must be positive")
++    if args.batch_size < 2 or args.lr <= 0 or args.temperature <= 0:
++        raise ValueError("Batch size must be >=2; learning rate and temperature must be positive")
++    if not np.isfinite([args.bondmin, args.bondmax, args.lr, args.temperature]).all():
++        raise ValueError("Coordinate limits, learning rate, and temperature must be finite")
++    if args.bondmin >= args.bondmax:
++        raise ValueError("--rcmin must be smaller than --rcmax for either direction")
++    if args.eps_type != "average":
++        raise ValueError("Only --eps_type average is supported by this branch")
++    workdir = args.workdir.expanduser().resolve()
++    output_dir = str(workdir / "log" / args.reaction)
++    if not args.overwrite and any(Path(output_dir).glob("bgan[0-9]*")):
++        raise FileExistsError("Existing loop outputs found; choose a new reaction name or pass --overwrite")
+ 
+     X = np.load(f"{output_dir}/dof.npy")
++    if X.ndim != 2 or X.shape[0] < 2:
++        raise ValueError("dof.npy must be a 2D array with at least two snapshots")
++    if not np.issubdtype(X.dtype, np.floating):
++        raise ValueError("dof.npy must contain floating-point coordinates")
+     if args.rc_file:
+-        X[:, 0] = load_reaction_coordinate(args.rc_file, X.shape[0])
++        rc_path = Path(args.rc_file).expanduser()
++        if not rc_path.is_absolute():
++            rc_path = workdir / rc_path
++        X[:, 0] = load_reaction_coordinate(str(rc_path), X.shape[0])
++    if not np.isfinite(X).all():
++        raise ValueError("Input coordinates contain NaN or infinity")
++    topology = [line.split() for line in (Path(output_dir) / "topology.txt").read_text().splitlines() if line.strip()]
++    if len(topology) != X.shape[1]:
++        raise ValueError("Expected one topology entry per entropy column; column 0 is reserved for the reaction coordinate")
++    lengths = [len(items) for items in topology[1:]]
++    if any(n not in (2, 3, 4) for n in lengths) or lengths != sorted(lengths):
++        raise ValueError("Topology entries must be bonds, then angles, then torsions")
++    if int(topology[0][0]) < 4 or any(lengths.count(n) < 2 for n in (2, 3, 4)):
++        raise ValueError("The average estimator requires >=4 entropy atoms and >=2 bonds, angles, and torsions")
++    if not np.any((X[:, 0] > args.bondmin) & (X[:, 0] < args.bondmax)):
++        raise ValueError("No real snapshots lie inside the reaction-coordinate range")
++    metadata = {
++        "package_version": version("bgan-eps-feoxo"),
++        "python": platform.python_version(),
++        "dependencies": {name: version(name) for name in ("numpy", "torch", "scikit-learn")},
++        "device": "cuda:0" if torch.cuda.is_available() else "cpu",
++        "input_shape": list(X.shape),
++        "arguments": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
++        "loop_seeds": [args.seed + index for index in range(args.loop)],
++    }
++    (Path(output_dir) / "run_settings.json").write_text(json.dumps(metadata, indent=2) + "\n")
+ 
+     dim = X.shape[1]
+     scaler = MinMaxScaler(feature_range=(-1, 1)).fit(X)
+@@ -110,3 +160,7 @@
+         ep = np.vstack((ep, np.load(f"{output_dir}/bgan{i}/eps.npy")))
+ 
+     np.save(f"{output_dir}/{args.reaction}_eps.npy", ep)
++
++
++if __name__ == "__main__":
++    main()
+--- working_modified/bgan.py
++++ bgan_eps_feoxo/bgan.py
+@@ -3,7 +3,7 @@
+ import numpy as np
+ import torch
+ from torch.utils.data import DataLoader
+-from model import Generator, Discriminator
++from .model import Generator, Discriminator
+ 
+ 
+ class BGANEPS(object):
+@@ -168,7 +168,7 @@
+                 % (epoch + 1, g_loss, e_loss, g_e_loss, dz_loss, dx_loss, d_loss)
+             )
+ 
+-        eps_output_dir = f"./{self.output_dir}/bgan{loop+1}"
++        eps_output_dir = os.path.join(self.output_dir, f"bgan{loop+1}")
+         if not os.path.exists(eps_output_dir):
+             os.makedirs(eps_output_dir)
+         self.write_validation_report(args, eps_output_dir)
+@@ -283,16 +283,14 @@
+             dx = x[1] - x[0]
+             runavg = np.linspace(x[0], x[-2], args.window_points)
+         bat = {2: "bond", 3: "angle", 4: "torsion"}
+-        eps_output_dir = f"./{self.output_dir}/bgan{loop+1}"
++        eps_output_dir = os.path.join(self.output_dir, f"bgan{loop+1}")
+         if not os.path.exists(eps_output_dir):
+             os.makedirs(eps_output_dir)
+ 
+-        dof_list = [
+-            line.split()
+-            for line in open(f"./{self.output_dir}/topology.txt", "r").readlines()
+-            if len(line.split()) != 1
+-        ]
+-        atom_num = int(open(f"./{self.output_dir}/topology.txt", "r").readlines()[0])
++        with open(os.path.join(self.output_dir, "topology.txt"), "r") as topology_file:
++            topology_lines = topology_file.readlines()
++        dof_list = [line.split() for line in topology_lines if len(line.split()) != 1]
++        atom_num = int(topology_lines[0])
+         bond_num = len([items for items in dof_list if len(items) == 2])
+         angle_num = len([items for items in dof_list if len(items) == 3])
+         torsion_num = len([items for items in dof_list if len(items) == 4])
+--- working_modified/xyz2bat.py
++++ bgan_eps_feoxo/xyz2bat.py
+@@ -1,8 +1,7 @@
+ import os
++from pathlib import Path
+ import numpy as np
+-import networkx as nx
+ import argparse
+-import mdtraj as md
+ 
+ 
+ def get_connectivity(X, nb1, nb2):
+@@ -26,6 +25,7 @@
+ 
+ 
+ def get_topology(graph, output_dir):
++    import networkx as nx
+     G = nx.Graph(graph)
+     atom_num = len(graph)
+     total_paths = []
+@@ -42,7 +42,7 @@
+     unique.sort()
+     unique.sort(key=len)
+ 
+-    with open(f"./{output_dir}/topology.txt", "w") as fw:
++    with open(str(Path(output_dir) / "topology.txt"), "w") as fw:
+         fw.write(str(atom_num) + "\n")
+         for t in unique:
+             fw.write(" ".join(str(s + 1) for s in t) + "\n")
+@@ -56,7 +56,7 @@
+     atom_num = int(lines[0])
+     unique = [tuple(int(item) - 1 for item in line.split()) for line in lines[1:]]
+ 
+-    with open(f"./{output_dir}/topology.txt", "w") as fw:
++    with open(str(Path(output_dir) / "topology.txt"), "w") as fw:
+         fw.write(str(atom_num) + "\n")
+         for t in unique:
+             fw.write(" ".join(str(s + 1) for s in t) + "\n")
+@@ -65,10 +65,14 @@
+ 
+ 
+ def xyz2bat(output_dir, args):
+-    traj = f"./dataset/{args.reaction}.xyz"
+-    trajectory = md.load_xyz(traj, top=f"./dataset/{args.ts}.pdb")
++    try:
++        import mdtraj as md
++    except ImportError as exc:
++        raise ImportError("XYZ conversion requires MDTraj; install the preprocess extra or a compatible Conda build") from exc
++    traj = str(args.workdir / "dataset" / f"{args.reaction}.xyz")
++    trajectory = md.load_xyz(traj, top=str(args.workdir / "dataset" / f"{args.ts}.pdb"))
+ 
+-    reference = md.load(f"./dataset/{args.ts}.pdb")
++    reference = md.load(str(args.workdir / "dataset" / f"{args.ts}.pdb"))
+     if args.topology_file:
+         atom_num, unique = read_topology_file(args.topology_file, output_dir)
+     else:
+@@ -92,14 +96,13 @@
+         raise ValueError("No bond, angle, or torsion coordinates were generated.")
+ 
+     snapshot = np.hstack(arrays)
+-    tmp_pdb = f"./{output_dir}/{args.reaction}.pdb"
+-    if os.path.exists(tmp_pdb):
+-        os.remove(tmp_pdb)
+-    np.save(f"./{output_dir}/dof.npy", snapshot)
++    np.save(str(Path(output_dir) / "dof.npy"), snapshot)
+ 
+ 
+-if __name__ == "__main__":
+-    parser = argparse.ArgumentParser("")
++def main(argv=None):
++    parser = argparse.ArgumentParser(description="Convert XYZ snapshots to internal coordinates using a PDB atom order and an optional manual topology.")
++    parser.add_argument("--workdir", type=Path, default=Path.cwd(), help="Directory containing dataset/ and log/")
++    parser.add_argument("--overwrite", action="store_true", help="Allow replacing existing dof.npy and topology.txt")
+     parser.add_argument("--atom1", type=int, default=0, help="first atom number in reaction coordinate (e.g., bond 2 or bond 3)")
+     parser.add_argument("--atom2", type=int, default=0, help="second atom number in reaction coordinate (e.g., bond 2 or bond 3)")
+     parser.add_argument("--reaction", type=str, default="", help="Name of the reaction file without format tag")
+@@ -113,7 +116,16 @@
+         help="Optional topology file to use instead of PDB-inferred connectivity. First line is atom count; remaining lines are 1-based bond/angle/torsion atom indices.",
+     )
+ 
+-    args = parser.parse_args()
++    args = parser.parse_args(argv)
++    args.workdir = args.workdir.expanduser().resolve()
++    for name in (args.reaction, args.ts):
++        if not name or Path(name).name != name or name in (".", "..") or "/" in name or "\\" in name:
++            raise ValueError("--reaction and --ts must be simple dataset names, not paths")
++    if args.topology_file:
++        topology_path = Path(args.topology_file).expanduser()
++        if not topology_path.is_absolute():
++            topology_path = args.workdir / topology_path
++        args.topology_file = str(topology_path)
+     if args.atom1 <= 0 or args.atom2 <= 0:
+         raise ValueError(
+             "--atom1 and --atom2 are required because dof.npy column 0 is the reaction coordinate. "
+@@ -124,8 +136,14 @@
+     if args.reaction == "":
+         raise ValueError("--reaction is required.")
+ 
+-    output_dir = "./log/%s" % args.reaction
++    output_dir = str(args.workdir / "log" / args.reaction)
++    if not args.overwrite and any((Path(output_dir) / name).exists() for name in ("dof.npy", "topology.txt")):
++        raise FileExistsError("Existing converted coordinates found; use a new reaction name or pass --overwrite")
+     if not os.path.exists(output_dir):
+         os.makedirs(output_dir)
+ 
+     xyz2bat(output_dir, args)
++
++
++if __name__ == "__main__":
++    main()

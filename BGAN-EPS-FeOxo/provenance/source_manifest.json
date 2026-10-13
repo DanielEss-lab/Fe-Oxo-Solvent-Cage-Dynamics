@@ -1,0 +1,35 @@
+{
+  "upstream_url": "https://github.com/rshin1209/bgan_eps",
+  "upstream_commit": null,
+  "note": "Local upstream snapshot supplied with the project; its original Git commit was not recorded. Fe-oxo and TQACl cores are byte-identical before packaging.",
+  "files": [
+    {
+      "file": "main.py",
+      "local_upstream_sha256": "40dc90ea02e20b5e16a7e357a8930280e2deb8fa5f6ffef5322f221eaa95d0e5",
+      "working_modified_sha256": "12d118e3e6bebe1608e2b7188d4c5eb1b51c2d18c0928b2f677c984055a7218c",
+      "tqacl_copy_sha256": "12d118e3e6bebe1608e2b7188d4c5eb1b51c2d18c0928b2f677c984055a7218c",
+      "packaged_sha256": "c9c7f64dce742c470079bd52cb530af7f5a24b32c2c432c2b61e36bb045e4362"
+    },
+    {
+      "file": "bgan.py",
+      "local_upstream_sha256": "15827a4b81c9dfd6683385952f8de6b4d679df635e7a098324e9ff3594d89f06",
+      "working_modified_sha256": "eb4291da3d07d556fe4c53ea537070d49de9ac91c53015e643188cb60c71cf3c",
+      "tqacl_copy_sha256": "eb4291da3d07d556fe4c53ea537070d49de9ac91c53015e643188cb60c71cf3c",
+      "packaged_sha256": "afbd9813cfdd20934a63cf50dd0c1ba5fa45b7a13e120d297bc1eddd9f508668"
+    },
+    {
+      "file": "model.py",
+      "local_upstream_sha256": "024471e048eee0b57bb29da478fc48035ef18b3a5b888faaf4565f028e0ef21a",
+      "working_modified_sha256": "024471e048eee0b57bb29da478fc48035ef18b3a5b888faaf4565f028e0ef21a",
+      "tqacl_copy_sha256": "024471e048eee0b57bb29da478fc48035ef18b3a5b888faaf4565f028e0ef21a",
+      "packaged_sha256": "024471e048eee0b57bb29da478fc48035ef18b3a5b888faaf4565f028e0ef21a"
+    },
+    {
+      "file": "xyz2bat.py",
+      "local_upstream_sha256": "1ea5c0588acb9357deec7c3c87f81d206b91efcbc9d1807800c1d50b3a2cc10b",
+      "working_modified_sha256": "99fe7bc5ced58a415d0170dddf3ed02822ba0e212e6b3128f8fc924912db3714",
+      "tqacl_copy_sha256": "99fe7bc5ced58a415d0170dddf3ed02822ba0e212e6b3128f8fc924912db3714",
+      "packaged_sha256": "d3d9b84c4fd815fa49ac1b671818702bc8ed203900c39b4fa0752fa3cfc2259d"
+    }
+  ]
+}
